@@ -1,0 +1,22 @@
+---
+title: "Gov51-ps4"
+author: "Yahir Ramirez"
+format: html
+editor: visual
+---
+
+## 1.) Project Setup
+
+<https://github.com/Yahir2026/gov51-ps4.git>
+
+# PS4 - Gov 51
+
+## 1 Setup and Exploration (10 points)
+
+### 1.1.1 Load packages and data
+
+```{r}
+library(tidyverse)
+
+gay <- read_csv("~/Desktop/Senior Spring/Gov 51/Weekly Assignments/gov51-ps4/data/raw/card1995.csv")
+```
