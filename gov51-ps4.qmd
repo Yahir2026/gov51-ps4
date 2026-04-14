@@ -16,7 +16,282 @@ editor: visual
 ### 1.1.1 Load packages and data
 
 ```{r}
-library(tidyverse)
+library(tidyverse) 
+library(estimatr) 
+library(modelsummary)
 
-gay <- read_csv("~/Desktop/Senior Spring/Gov 51/Weekly Assignments/gov51-ps4/data/raw/card1995.csv")
+card <- read_csv("~/Desktop/Senior Spring/Gov 51/Weekly Assignments/gov51-ps4/data/raw/card1995.csv")
 ```
+
+### 1.2 Describe the data How many observations are in the dataset? What is the unit of observation?
+
+```{r}
+dim(card)
+```
+
+3010 total observations with 16 variables. They have normal standard wage of dollars, lwage in logarithmic units, educ in years of schooling, few dummy variables where it's either 1 or 0, experience being squared, etc. Essentially, each unit of observation is one person.
+
+### 1.3 Distribution of years of education
+
+Create a histogram of educ. What is the mean? Are there any unusual spikes? What might explain them?
+
+```{r}
+library(ggplot2)
+
+ggplot(card, aes(x = educ)) + 
+  geom_histogram() + 
+  xlim(0, 20) 
+```
+
+```{r}
+mean(card$educ)
+```
+
+There are unusual spikes at 12 years, 16 years, and then you have some outliers. I am assuming the spikes is based on years of education after kindergarten. So 12 years would be graduating from high school and the spike at 16 years (smaller) is people graduating from college. The mean is 13.26 years of education.
+
+### 1.4 The naïve relationship
+
+Create a scatter plot of lwage (y-axis) against educ (x-axis). Add a linear regression line. Based on this plot, does more education appear to be associated with higher wages?
+
+```{r}
+ggplot(data = card, aes(x = educ, y = lwage)) + 
+  geom_point() +  geom_smooth(method = "lm", se = FALSE)
+```
+
+The linear line goes up positively. We can see that as years of education continues to rise, the percent increase of wage also increases. Therefore, one can safely claim that more years of schooling is associated with a log increase of one's wage.
+
+### 1.5 Why OLS might be misleading
+
+The OLS regression of lwage on educ might not give us the causal effect of education. Name two specific reasons why people with more education might earn more even if education itself had no effect.
+
+1.  Graduates may in general be more motivated to pursue risks, therefore, risk taking leads to more opportunities to earn money
+2.  Graduates tend to have more connections from their educational institutions. Therefore, these connections can set up graduates with lucrative salaries, thus leading to higher wages.
+
+## 2 The Instrument: College Proximity (25 points) 
+
+### 2.1 What the instrument measures
+
+The variable nearc4 equals 1 if the respondent grew up near a 4-year college. What share of respondents in this sample grew up near a 4-year college?
+
+```{r}
+card |>
+  group_by(nearc4) |>
+  summarize(n = n())
+
+2053/3010
+```
+
+From all observations, there is a total of 2,053 of people who grew up near a 4-year college. So 68.2% of respondents.
+
+### 2.2 Relevance: does proximity affect education?
+
+The first condition for a valid instrument is relevance: the instrument must be correlated with the endogenous variable (education).
+
+Run the following regression — the first stage — and report the coefficient on nearc4 along with its standard error and t-statistic.
+
+```{r}
+first_stage <- lm_robust(educ ~ nearc4 + black + smsa + south + exper + expersq + married, data = card, se_type = "HC2")
+first_stage
+```
+
+Interpret the coefficient on nearc4 in a sentence. Does the sign make sense?
+
+'nearc4' (being near college) has a coefficient of 0.327, a standard error of 0.081, and a t-statistic of 4.06. The sign of 'nearc4' is positive which seems quite normal. Being near a 4-year college can definitely increase the years that someone will pursue in academia. Holding all other variables constant, there is an increase of 0.327 years of education on average when an individual lives near a 4-year college in comparison to those who do not.
+
+### 2.3 Checking instrument strength 
+
+Report the t-statistic on nearc4 from the first-stage regression. Compute the first-stage F-statistic as 𝐹 = 𝑡2. Is your instrument strong? (Rule of thumb: F \> 10 suggests a strong instrument.) Why does instrument strength matter for the reliability of the 2SLS estimate?
+
+```{r}
+# squaring the t stat from lm on 'nearc4'
+
+4.0607488^2
+```
+
+In squaring the t-statistic we received from the last problem, we got 16.49 which is \> 10, therefore this suggests that the variable 'nearc4' is in fact a strong instrument. Instrument strength matters because if the instrument is only weakly related to education, then the 2SLS estimate will be imprecise and less trustworthy.
+
+### 2.4 Exclusion restriction 
+
+The second condition for a valid instrument is the exclusion restriction: college proximity must affect wages only through its effect on education — not through any other channel.
+
+(a) State the exclusion restriction formally: what must be true about the relationship between nearc4 and lwage once we control for education?
+
+    Formally, the exclusion restriction requires that, once education is held constant, nearc4 should not affect lwage directly. In other words, the only way college proximity can affect wages is through its effect on years of education.
+
+(b) Can you think of a way the exclusion restriction might be violated — that is, a reason why growing up near a college might affect your wages for reasons other than more education? Be specific.
+
+Growing up near a college can increase one wages because of factors like more work opportunities near a bustling college town, more professionalization and potential connections one can form, and other factors that can compound onto the error term. So it isn't necessarily years of education but these other things one should think about.
+
+### 2.5 Balance check 
+
+If the instrument is as-good-as-randomly assigned, respondents who grew up near a college should look similar on pre-treatment characteristics to those who did not. Compute the mean black, smsa, and south for the two groups (nearc4 == 0 and nearc4 == 1). Are the groups balanced? What does any imbalance tell you about the instrument?
+
+```{r}
+pre_treatment_char <- card |> group_by(nearc4) |>
+  summarize(
+    mean_black = mean(black, na.rm = T),
+    mean_smsa = mean(smsa, na.rm = T),
+    mean_south = mean(south, na.rm = T),
+    n = n()
+  )
+
+pre_treatment_char
+```
+
+Black - if a person is african american
+
+smsa - lived in a metropolitan area
+
+south - lived in the south
+
+Both groups are not balanced. In terms of the percent make up of the other variables, proportion of people who are black is fairly parallel, whereas both smsa (metro) and south have a disparity of \~35% and \~23% respectively. It suggests that people who live near a 4-year college are more likely to come from metropolitan or non-Southern areas. This raises some concern that nearc4 may be correlated with other background characteristics, which could make the exclusion restriction less plausible. However, imbalance in observed covariates does not automatically invalidate the instrument; it simply means we should be more cautious about whether college proximity is truly exogenous (not affected by hidden variables).
+
+## 3 The Wald Estimator (15 points)
+
+### 3.1 Compute the reduced form 
+
+Run the reduced form regression: regress lwage directly on nearc4 (without educ, but including the same controls as the first stage). Report the coefficient on nearc4 and interpret it: what does it tell us about how proximity to a college relates to wages?
+
+```{r}
+
+reduced_form <- lm_robust(lwage ~ nearc4 + black + south + smsa + exper + expersq + married, data = card, se_type = "HC2")
+
+reduced_form  
+```
+
+The coefficient for 0.041 meaning that if we made all other variables constant, there is an increase of 0.041 or approximately a 4.1% increase in wages if someone lives near a university. This positive relationship is consistent with the idea that proximity to a college may increase education, which in turn raises wages, though it could also reflect other factors if the exclusion restriction does not hold.
+
+### 3.2 Calculate the Wald estimator by hand 
+
+Using the first-stage coefficient from Section 2.2 and the reduced-form coefficient from Section 3.1, compute the Wald estimator by hand. Show your calculation.
+
+```{r}
+wald_estimate <- 0.041 / 0.327
+wald_estimate
+```
+
+0.327 - first_stage
+
+0.041 - reduced-form
+
+In putting this together, we place the first_stage in denominator and the reduced_form in the numerator. We get a Wald-estimate of 0.125.
+
+### 3.3 Interpret the Wald estimator 
+
+Interpret your Wald estimate in a sentence. What does it say about the effect of one additional year of education on wages?
+
+The value of 0.125 represents the approximation that each additional year of education leads to about a 12.5% increase in wages for individuals whose education was increased by living near a 4-year college.
+
+## 
+4 OLS vs. 2SLS (35 points) 
+
+### 4.1 OLS estimate 
+
+Run OLS of lwage on educ and the controls. Report the coefficient on educ.
+
+```{r}
+ols <- lm_robust(lwage ~ educ + black + smsa + south + exper + expersq + married, data = card, se_type = "HC2")
+ols
+```
+
+Educ has a coefficient of 0.071 meaning that, given that all other variables are constant, there is an increase of 0.071 or 7.1% increase in wages for every year of schooling.
+
+### 4.2 2SLS estimate 
+
+Run the 2SLS regression using iv_robust() from estimatr. The formula syntax separates the structural equation (left of \|) from the first-stage instruments (right of \|):
+
+```{r}
+iv <- iv_robust(lwage ~ educ + black + smsa + south + exper + expersq + married | nearc4 + black + smsa + south + exper + expersq + married, data = card, se_type = "HC2")
+iv
+```
+
+Report the coefficient on educ. Does it match your Wald estimate from Section 3.2?
+
+The educ coefficient is 0.125. It directly matches the Wald estimate from section 3.2.
+
+### 4.3 Side-by-side comparison 
+
+Display both the OLS and 2SLS estimates in a single regression table using modelsummary(). Keep only the rows for educ and the model statistics (N, R²).
+
+```{r}
+modelsummary(list("OLS" = ols, "2SLS" = iv), coef_map = c("educ" = "Years of Education"), gof_map = c("nobs", "r.squared"))
+```
+
+### 4.4 Why do OLS and 2SLS differ? 
+
+The OLS and 2SLS estimates of the return to education are likely to differ. Answer the following:
+
+1.  Which is larger — OLS or 2SLS?
+
+    2SLS is larger than OLS
+
+2.  Card (1995) interprets the finding that 2SLS \> OLS as evidence of downward bias in OLS. What could cause OLS to underestimate the return to education? (Hint: think about measurement error in educ, or about who the compliers are.)
+
+    OLS can underestimate the return to education because educ may be measured with error, which biases the OLS estimate downward. Another reason is that the 2SLS estimate captures the effect for the specific group of people whose education changed because they lived near a 4-year college, and that group may receive larger wage gains from schooling than the average person.
+
+3.  Which estimate is more credible as a causal estimate of the effect of education on wages? Explain briefly.
+
+The 2SLS estimate is more credible as a causal estimate because it uses variation in education generated by proximity to a 4-year college, rather than relying on the full observed variation in education. This helps reduce bias from unobserved confounders that may affect both education and wages. However, this conclusion depends on the instrument satisfying relevance and the exclusion restriction.
+
+2SLS uses the part of the differences in educ that is explained by nearc4, while OLS uses all differences in educ across people. Because OLS uses all education differences, it may be biased by outside factors like ability, motivation, family background, or networks that affect both education and wages.
+
+### 
+4.5 Adding IQ as a control 
+
+The dataset includes IQ scores for a subset of respondents.
+
+1.  Run OLS of lwage on educ, IQ, and all other controls. How does including IQ change the OLS coefficient on educ?
+
+    ```{r}
+    ols_2 <- lm_robust(
+      lwage ~ educ + IQ + black + smsa + south + exper + expersq + married,
+      data = card,
+      se_type = "HC2"
+    )
+    ols_2
+    ```
+
+    The educ coefficient changed to 0.068 when it includes IQ. This is a decrease from the 0.071 found from the previous iteration without IQ. This suggests that IQ plays a small role in how it affects years of education on wages.
+
+2.  Now run 2SLS including IQ. Does the 2SLS estimate change substantially when IQ is added?
+
+    ```{r}
+    iv_2 <- iv_robust(lwage ~ educ + IQ + black + smsa + south + exper + expersq + married | nearc4 + IQ + black + smsa + south + exper + expersq + married, data = card, se_type = "HC2")
+    iv_2
+    ```
+
+    The educ found here is 0.109 which is a bit lower from the previous iteration of the 2SLS of 0.125 which contained no IQ. This again suggests that IQ may explain somewhat its role in regards the outcome of wages based on years of schooling.
+
+3.  What does the comparison between part (a) and part (b) suggest about the source of the discrepancy between OLS and IV?
+
+The comparison suggests that omitted ability, as partly captured by IQ, is not the whole reason OLS and IV differ. Adding IQ changes the estimates somewhat, but IV remains noticeably larger than OLS. This means the gap is likely coming from other sources too, such as measurement error in education or higher returns for the people whose schooling was affected by living near a college.
+
+## 5 Interpretation and LATE (15 points) 
+
+### 5.1 Who are the compliers?
+
+In a randomized experiment, the ATE averages over everyone. But IV estimates a Local Average Treatment Effect (LATE) — the average effect for compliers: units whose treatment status changes when the instrument changes.
+
+In this context, who are the compliers? Describe them in concrete terms: what type of person’s educational attainment was increased because they happened to grow up near a 4-year college?
+
+The compliers are those who are near 4-year colleges. This is simply because these individuals are able to reap the benefits of being near a bustling college.
+
+### 5.2 Write the LATE interpretation 
+
+Write a single careful sentence interpreting the 2SLS coefficient as a LATE. Your sentence should specify:
+
+\(i\) The causal effect being measured
+
+\(ii\) For which specific group of people
+
+\(iii\) What source of variation identifies it
+
+Keeping all variables constant, the 2SLS found that there is an approximate increase in 0.109 or 10.9% increase in wages for every year of schooling if students live near a 4-year college. This effect depends on college proximity.
+
+### 5.3 External validity 
+
+Card finds a 2SLS estimate around 12–13% return to each additional year of education. Is this LATE likely to be the same as the ATE (the return for the average person in the sample)?
+
+Think about whether the compliers — men who went to more school because they happened to live near a college — are likely to have higher or lower returns to education than the typical person. Explain your reasoning.
+
+Card’s LATE is not necessarily the same as the ATE, because the 2SLS estimate applies specifically to compliers, people whose schooling increased because they lived near a college—rather than to the average person in the sample. These individuals may have different returns to education than the typical person. In particular, compliers may have relatively high returns if proximity helped people on the margin attend college when they otherwise would not have, and that extra schooling substantially improved their earnings. So the LATE could be larger than the ATE, meaning Card’s estimate may not fully generalize to everyone.
